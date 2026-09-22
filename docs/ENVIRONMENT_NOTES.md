@@ -127,3 +127,34 @@ tracked, for three reasons:
 
 Reproducing this environment requires only the pinned interpreter
 version recorded above plus `pip install -r requirements.txt`.
+
+## Docker — container name collision
+
+`docker compose up -d postgres` failed on first run:
+
+    Error response from daemon: Conflict. The container name
+    "/dss150p-postgres" is already in use by container "88efc06afe25..."
+
+The conflicting container belonged to a different compose project:
+
+    project=dss150p_lab01_vicente_alfonso_enrique_b
+    dir=/Users/alfonsi/DSS150P_Lab01_Vicente_Alfonso_Enrique_B
+    status=exited
+
+Container names are global to the Docker daemon, not scoped per compose
+project, so an exited container from Laboratory Activity 1 still held the
+name this lab's `docker-compose.yml` requests.
+
+Resolved by removing the stale container with `docker rm dss150p-postgres`.
+This removes the container only. Laboratory Activity 1's data lives in the
+named volume `dss150p_lab01_vicente_alfonso_enrique_b_pgdata`, which is a
+separate Docker object and was verified present with `docker volume ls`
+both before and after removal.
+
+## Why the container built when the host could not
+
+`Dockerfile` pins `FROM python:3.11-slim`. The same `requirements.txt`
+that failed on the host's Python 3.14.2 installed without incident inside
+the image, because cp311 wheels exist for every pinned package. This
+independently confirms the diagnosis in Attempt 1: the failure was an
+interpreter mismatch, not a problem with the pinned versions.
