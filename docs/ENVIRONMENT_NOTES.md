@@ -1,6 +1,6 @@
 # Environment Notes
 
-Machine: MacBook Air Apple Silicon, macOS, zsh
+Machine: MacBook Air, Apple Silicon (arm64), macOS, zsh
 Author: Vicente Alfonso Enrique B.
 
 ## Attempt 1 — Python 3.14.2 (FAILED)
@@ -15,9 +15,11 @@ Commands run:
     python -m pip install --upgrade pip     # succeeded, pip 26.2.1
     pip install -r requirements.txt          # FAILED
 
-`pip` reported no matching wheels for the pinned versions and fell back
-to downloading source distributions (`.tar.gz`) for both `pandas` and
-`pyarrow`. The build then failed:
+`pip` found no matching wheels for the pinned versions and fell back to
+downloading source distributions (`.tar.gz`) for both `pandas` and
+`pyarrow`. `pandas` completed metadata preparation from source.
+`pyarrow` then failed during `Getting requirements to build wheel`,
+which aborted the install before `pandas` reached its compile step:
 
     error: subprocess-exited-with-error
     x Getting requirements to build wheel did not run successfully.
@@ -30,15 +32,20 @@ to downloading source distributions (`.tar.gz`) for both `pandas` and
 
 This is an interpreter mismatch, not a broken pin. Four of the five
 pinned packages were released before Python 3.14 existed, so PyPI
-publishes no `cp314` wheel for them:
+publishes no `cp314` wheel for them on macOS arm64:
 
-| Package              | cp314 wheel | Notes                               |
-|----------------------|-------------|-------------------------------------|
-| pandas==2.2.3        | no          | falls back to source build          |
-| pyarrow==17.0.0      | no          | source build requires Arrow C++     |
-| psycopg[binary]==3.2.3 | no        | binary distribution, no cp314       |
-| python-dotenv==1.0.1 | n/a         | pure Python, installs anywhere      |
-| PyYAML==6.0.2        | no          | source build requires Cython        |
+| Package                | cp314 wheel | Notes                            |
+|------------------------|-------------|----------------------------------|
+| pandas==2.2.3          | no          | falls back to source build       |
+| pyarrow==17.0.0        | no          | source build requires Arrow C++  |
+| psycopg[binary]==3.2.3 | no          | binary distribution, no cp314    |
+| python-dotenv==1.0.1   | n/a         | pure Python, installs anywhere   |
+| PyYAML==6.0.2          | no          | source build requires Cython     |
+
+Only `pyarrow` was observed to fail. `pandas` was still resolving when
+pip aborted, so its source build was never attempted. The wheel
+availability above is stated from the distributions pip selected, not
+from an observed failure of each package.
 
 Building `pyarrow` from source requires the Apache Arrow C++ libraries
 and a configured toolchain, which is out of scope for this activity.
