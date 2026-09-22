@@ -65,3 +65,65 @@ pins to match the interpreter does not.
 Rejected alternative: `pip install --upgrade setuptools wheel` would
 likely clear the `pkg_resources` error, but `pyarrow` would still fail
 at the C++ build step, so it does not address the actual cause.
+
+## Attempt 2 — Python 3.12.14 (SUCCESS)
+
+Python 3.12 was installed via Homebrew. Homebrew installs `python@3.12`
+as keg-only, so it is not placed on `PATH` and must be invoked by full
+path when creating the virtual environment.
+
+Commands run:
+
+    brew install python@3.12
+    /opt/homebrew/bin/python3.12 --version    # Python 3.12.14
+    deactivate
+    rm -rf .venv
+    /opt/homebrew/bin/python3.12 -m venv .venv
+    source .venv/bin/activate
+    python --version                          # Python 3.12.14
+    python -m pip install --upgrade pip       # pip 26.2.1
+    pip install -r requirements.txt           # SUCCESS
+
+All packages resolved to prebuilt wheels
+(`cp312-cp312-macosx_11_0_arm64.whl`). Nothing was compiled from source.
+
+### Recorded environment
+
+Interpreter: Python 3.12.14 (Homebrew, arm64)
+pip: 26.2.1
+
+`pip freeze` output:
+
+    numpy==2.5.3
+    pandas==2.2.3
+    psycopg==3.2.3
+    psycopg-binary==3.2.3
+    pyarrow==17.0.0
+    python-dateutil==2.9.0.post0
+    python-dotenv==1.0.1
+    pytz==2026.3.post1
+    PyYAML==6.0.2
+    six==1.17.0
+    typing_extensions==4.16.0
+    tzdata==2026.4
+
+All five pinned packages resolved to the exact requested versions. The
+remaining seven are transitive dependencies pulled in by pandas and
+psycopg.
+
+### Why `.venv` is not committed
+
+The virtual environment is listed in `.gitignore` and deliberately not
+tracked, for three reasons:
+
+1. It is platform- and interpreter-specific. This one contains
+   `macosx_11_0_arm64` binaries built for CPython 3.12; it would not
+   work on Linux, on Intel macOS, or on a different Python version.
+2. It is fully reproducible from `requirements.txt`, which is the
+   artifact that actually defines the environment. Committing both would
+   create two sources of truth that can disagree.
+3. It is large and changes constantly, which would make the repository
+   history unreadable.
+
+Reproducing this environment requires only the pinned interpreter
+version recorded above plus `pip install -r requirements.txt`.
