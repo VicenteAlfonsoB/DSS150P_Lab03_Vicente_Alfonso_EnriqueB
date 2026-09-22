@@ -1,0 +1,200 @@
+
+========================================================================
+customers.csv - shape, columns, nulls
+========================================================================
+rows = 3003
+columns = ['customer_id', 'first_name', 'last_name', 'email', 'city', 'customer_tier', 'created_at', 'updated_at']
+
+null counts:
+email    4
+
+========================================================================
+customers.csv - duplicate business keys on customer_id
+========================================================================
+distinct customer_id = 3000   rows = 3003   extra rows = 3
+
+rows in duplicate groups = 6
+customer_id                updated_at first_name  last_name                              email     city
+     C00120 2025-03-01T08:13:00+00:00      Paolo    Pascual       paolo.pascual120@example.com Marikina
+     C00120 2025-03-03T08:13:00+00:00      Paolo    Pascual       PAOLO.PASCUAL120@EXAMPLE.COM Marikina
+     C01250 2025-04-09T03:18:00+00:00    Queenie Villanueva queenie.villanueva1250@example.com   Makati
+     C01250 2025-04-11T03:18:00+00:00    Queenie Villanueva QUEENIE.VILLANUEVA1250@EXAMPLE.COM   Makati
+     C02600 2026-03-10T03:36:00+00:00      Sofia     Torres       sofia.torres2600@example.com Marikina
+     C02600 2026-03-12T03:36:00+00:00      Sofia     Torres       SOFIA.TORRES2600@EXAMPLE.COM Marikina
+
+========================================================================
+customers.csv - timestamp parsing (UTC)
+========================================================================
+created_at: unparseable=0 null=0 min=2023-01-01 00:00:00+00:00 max=2024-01-01 00:00:00+00:00
+updated_at: unparseable=0 null=0 min=2024-01-01 01:11:00+00:00 max=2026-04-30 19:47:00+00:00
+
+========================================================================
+customers.csv - blank or whitespace-only text fields
+========================================================================
+first_name: blank = 0
+last_name: blank = 0
+email: blank = 4
+city: blank = 0
+customer_tier: blank = 0
+
+========================================================================
+customers.csv - value checks
+========================================================================
+customer_tier values:
+customer_tier
+Bronze      1369
+Silver       896
+Gold         600
+Platinum     138
+
+emails without "@" = 0
+
+city values needing normalization = 2
+88        manila  
+1777      manila  
+
+========================================================================
+products.json - shape, columns, nulls
+========================================================================
+rows = 601
+columns = ['product_id', 'name', 'brand', 'unit_price', 'active', 'updated_at', 'category.name', 'category.department']
+
+null counts:
+  (none)
+
+========================================================================
+products.json - duplicate business keys on product_id
+========================================================================
+distinct product_id = 600   rows = 601   extra rows = 1
+
+rows in duplicate groups = 2
+product_id                updated_at                 name brand  unit_price  active
+     P0300 2024-03-21T00:00:00+00:00      Nova Tablet 300  Nova    41816.96    True
+     P0300 2024-03-24T00:00:00+00:00 Nova Tablet 300 Rev2  Nova    41816.96    True
+
+========================================================================
+products.json - timestamp parsing (UTC)
+========================================================================
+updated_at: unparseable=0 null=0 min=2024-01-01 00:00:00+00:00 max=2026-04-30 00:00:00+00:00
+
+========================================================================
+products.json - numeric coercion and ranges
+========================================================================
+
+unit_price: non-numeric=0 null=0
+  min=-199.0  max=89926.78  mean=43516.7362
+
+========================================================================
+products.json - flattened category and active flag
+========================================================================
+columns after json_normalize: ['product_id', 'name', 'brand', 'unit_price', 'active', 'updated_at', 'category.name', 'category.department']
+
+category.name top values:
+category.name
+Networking    90
+Accessory     87
+Laptop        79
+Storage       75
+Monitor       74
+Phone         72
+Audio         68
+Tablet        56
+
+active values:
+active
+True     573
+False     28
+
+========================================================================
+orders.csv - shape, columns, nulls
+========================================================================
+rows = 50005
+columns = ['order_id', 'customer_id', 'product_id', 'order_timestamp', 'quantity', 'unit_price', 'discount_pct', 'status', 'updated_at']
+
+null counts:
+  (none)
+
+========================================================================
+orders.csv - duplicate business keys on order_id
+========================================================================
+distinct order_id = 50000   rows = 50005   extra rows = 5
+
+rows in duplicate groups = 10
+order_id                updated_at customer_id product_id           order_timestamp quantity
+O0000100 2025-03-15T02:59:00+00:00      C02686      P0308 2025-03-14T15:59:00+00:00        2
+O0000100 2025-03-16T02:59:00+00:00      C02686      P0308 2025-03-14T15:59:00+00:00        2
+O0002500 2026-02-14T22:13:00+00:00      C00322      P0567 2026-02-12T21:13:00+00:00        4
+O0002500 2026-02-15T22:13:00+00:00      C00322      P0567 2026-02-12T21:13:00+00:00        4
+O0010000 2025-05-07T21:09:00+00:00      C02117      P0424 2025-05-05T06:09:00+00:00        6
+O0010000 2025-05-08T21:09:00+00:00      C02117      P0424 2025-05-05T06:09:00+00:00        6
+O0022222 2025-04-14T14:49:00+00:00      C02998      P0102 2025-04-12T09:49:00+00:00        2
+O0022222 2025-04-15T14:49:00+00:00      C02998      P0102 2025-04-12T09:49:00+00:00        2
+O0049900 2026-04-28T02:49:00+00:00      C02870      P0556 2026-04-27T07:49:00+00:00        6
+O0049900 2026-04-29T02:49:00+00:00      C02870      P0556 2026-04-27T07:49:00+00:00        6
+
+========================================================================
+orders.csv - timestamp parsing (UTC)
+========================================================================
+order_timestamp: unparseable=0 null=0 min=2025-01-01 00:11:00+00:00 max=2026-09-12 23:44:00+00:00
+updated_at: unparseable=0 null=0 min=2025-01-01 04:41:00+00:00 max=2026-09-15 20:15:00+00:00
+
+========================================================================
+orders.csv - numeric coercion and ranges
+========================================================================
+
+quantity: non-numeric=0 null=0
+  min=0  max=8  mean=4.4958
+
+unit_price: non-numeric=0 null=0
+  min=160.67  max=89926.78  mean=43449.2823
+
+discount_pct: non-numeric=0 null=0
+  min=0.0  max=0.15  mean=0.0499
+
+========================================================================
+orders.csv - status values vs allowed list
+========================================================================
+allowed = ['PENDING', 'PAID', 'PACKED', 'SHIPPED', 'DELIVERED', 'CANCELLED']
+status
+CANCELLED    8461
+DELIVERED    8378
+SHIPPED      8372
+PACKED       8355
+PAID         8219
+PENDING      8219
+UNKNOWN         1
+
+rows with disallowed status = 1
+order_id  status
+O0004445 UNKNOWN
+
+========================================================================
+orders.csv - quantity outside [1, 20]
+========================================================================
+rows = 1
+order_id quantity
+O0000112        0
+
+========================================================================
+orders.csv - discount_pct out of range, non-positive price
+========================================================================
+discount_pct outside [0, 1] = 0
+unit_price <= 0 = 0
+
+========================================================================
+orders.csv - orphan references
+========================================================================
+orders with unknown customer_id = 1
+order_id customer_id
+O0002223      C99999
+
+orders with unknown product_id = 1
+order_id product_id
+O0003334      P9999
+
+========================================================================
+summary
+========================================================================
+customers rows=3003 distinct=3000
+products  rows=601 distinct=600
+orders    rows=50005 distinct=50000
