@@ -4,6 +4,7 @@ from src.config import PROJECT_ROOT, DB, SETTINGS, path_for
 from src.common.audit import new_run_id
 from src.extract.files import extract_sources
 from src.transform.staging import build_staging
+from src.transform.curated import build_curated
 
 
 def main():
@@ -39,13 +40,16 @@ def main():
             raise FileNotFoundError(
                 f'No raw snapshot for run_id={run_id}. Run extract first with '
                 f'the same PIPELINE_RUN_ID.')
-        staging, quarantine = build_staging(raw_dir, run_id)
+        staging, q_staging = build_staging(raw_dir, run_id)
+        curated, q_curated = build_curated(staging, run_id)
         print(f'run_id={run_id}')
         for name, frame in staging.items():
             print(f'staging.{name} rows={len(frame)}')
-        print(f'quarantine rows={len(quarantine)}')
-        if len(quarantine):
-            print(quarantine['reason'].value_counts().to_string())
+        print(f'curated.sales_order_lines rows={len(curated)}')
+        print(f'quarantine.total rows={len(q_staging) + len(q_curated)}')
+        for frame in (q_staging, q_curated):
+            if len(frame):
+                print(frame['reason'].value_counts().to_string())
         return
 
     # TODO: Wire the modular functions together. Keep orchestration logic thin.
