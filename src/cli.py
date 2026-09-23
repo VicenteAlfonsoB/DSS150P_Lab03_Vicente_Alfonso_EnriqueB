@@ -8,6 +8,7 @@ from src.transform.staging import build_staging
 from src.transform.curated import build_curated
 from src.load.postgres import upsert_curated, record_run
 from src.validate.quality import validate_curated
+from src.benchmark.storage import run_benchmark, write_partitioned_parquet
 
 
 def main():
@@ -45,10 +46,13 @@ def main():
                 f'the same PIPELINE_RUN_ID.')
         staging, q_staging = build_staging(raw_dir, run_id)
         curated, q_curated = build_curated(staging, run_id)
+        part_dir = write_partitioned_parquet(
+            curated, path_for('partition_dir') / f'run_id={run_id}')
         print(f'run_id={run_id}')
         for name, frame in staging.items():
             print(f'staging.{name} rows={len(frame)}')
         print(f'curated.sales_order_lines rows={len(curated)}')
+        print(f'partitioned={part_dir}')
         print(f'quarantine.total rows={len(q_staging) + len(q_curated)}')
         for frame in (q_staging, q_curated):
             if len(frame):
@@ -85,12 +89,28 @@ def main():
         print('all checks passed')
         return
 
+    if args.command == 'benchmark':
+        run_id = new_run_id()
+        curated_file = path_for('curated_dir') / f'run_id={run_id}' / 'sales_order_lines.parquet'
+        if not curated_file.exists():
+            raise FileNotFoundError(
+                f'No curated output for run_id={run_id}. Run transform first.')
+        out_dir = path_for('benchmark_dir') / f'run_id={run_id}'
+        frame = run_benchmark(curated_file, out_dir, repeats=args.repeats)
+        print(f'run_id={run_id}')
+        print(f'repeats={args.repeats}')
+        print(frame.drop(columns='notes').to_string(index=False))
+        print(f'written={out_dir / "benchmark_results.csv"}')
+        return
+
     if args.command == 'run-all':
         run_id = new_run_id()
         started = utc_now_iso()
         raw_dir = extract_sources(run_id)
         staging, q_staging = build_staging(raw_dir, run_id)
         curated, q_curated = build_curated(staging, run_id)
+        write_partitioned_parquet(
+            curated, path_for('partition_dir') / f'run_id={run_id}')
         affected = upsert_curated(curated, run_id)
         errors = validate_curated(curated)
         rows_quarantined = len(q_staging) + len(q_curated)
