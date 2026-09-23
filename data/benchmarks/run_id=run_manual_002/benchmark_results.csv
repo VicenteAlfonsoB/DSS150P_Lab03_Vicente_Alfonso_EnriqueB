@@ -1,0 +1,5 @@
+storage_type,file_size_bytes,write_seconds,full_read_seconds,filtered_read_seconds,row_count,notes
+csv,14193582,0.3162578330375254,0.11423916707281023,0.10708195809274912,49897,"row-oriented text, no pushdown; whole file read then filtered; 8355 rows match status=DELIVERED; types lost on read"
+jsonl,29891684,0.3407714579952881,0.23822366702370346,0.27311224990990013,49897,"column names repeated on every row; no pushdown; 8355 rows match status=DELIVERED; NUMERIC converted to float, exact decimal fidelity lost"
+parquet,5433864,0.12901891604997218,0.03157516603823751,0.009789792005904019,49897,columnar and compressed; predicate pushed down to the reader; 8355 rows match status=DELIVERED; decimal128 preserves NUMERIC exactly
+postgresql,13639680,0.3864917919272557,0.19282424997072667,0.03718679095618427,49897,"COPY into an unindexed table, LIKE ... INCLUDING DEFAULTS; 8355 rows match status=DELIVERED; size from pg_total_relation_size; sequential scan, no index"
