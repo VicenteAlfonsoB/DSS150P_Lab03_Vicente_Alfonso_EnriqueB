@@ -1,4 +1,5 @@
 import argparse
+
 import pandas as pd
 
 from src.config import PROJECT_ROOT, DB, SETTINGS, path_for
@@ -6,7 +7,7 @@ from src.common.audit import new_run_id, utc_now_iso
 from src.extract.files import extract_sources
 from src.transform.staging import build_staging
 from src.transform.curated import build_curated
-from src.load.postgres import upsert_curated, record_run
+from src.load.postgres import upsert_curated, record_run, load_partition
 from src.validate.quality import validate_curated
 from src.benchmark.storage import run_benchmark, write_partitioned_parquet
 
@@ -101,6 +102,21 @@ def main():
         print(f'repeats={args.repeats}')
         print(frame.drop(columns='notes').to_string(index=False))
         print(f'written={out_dir / "benchmark_results.csv"}')
+        return
+
+    if args.command == 'load-partition':
+        run_id = new_run_id()
+        part_dir = (path_for('partition_dir') / f'run_id={run_id}'
+                    / f'order_year={args.year}' / f'order_month={args.month}')
+        if not part_dir.exists():
+            raise FileNotFoundError(
+                f'No partition for {args.year}-{args.month:02d} under '
+                f'run_id={run_id}. Run transform first.')
+        df = pd.read_parquet(part_dir)
+        rows = load_partition(df, args.year, args.month, run_id)
+        print(f'run_id={run_id}')
+        print(f'partition=order_year={args.year}/order_month={args.month}')
+        print(f'rows_loaded={rows}')
         return
 
     if args.command == 'run-all':

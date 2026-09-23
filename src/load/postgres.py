@@ -5,6 +5,7 @@ import pandas as pd
 import psycopg
 
 from src.config import DB
+from src.common.audit import utc_now_iso
 
 COLUMNS = [
     'order_id', 'customer_id', 'product_id', 'order_timestamp',
@@ -38,6 +39,16 @@ ON CONFLICT (pipeline_run_id) DO UPDATE SET
     message = EXCLUDED.message
 """
 
+PARTITION_SQL = """
+INSERT INTO audit.partition_loads (
+    partition_key, loaded_at_utc, row_count, pipeline_run_id
+) VALUES (%s, %s, %s, %s)
+ON CONFLICT (partition_key) DO UPDATE SET
+    loaded_at_utc = EXCLUDED.loaded_at_utc,
+    row_count = EXCLUDED.row_count,
+    pipeline_run_id = EXCLUDED.pipeline_run_id
+"""
+
 
 def _connect():
     return psycopg.connect(
@@ -57,7 +68,7 @@ def _rows(df):
             pd.Timestamp(r.order_timestamp).to_pydatetime(),
             _text(r.customer_city), _text(r.customer_tier),
             _text(r.product_name), _text(r.category), _text(r.brand),
-            int(r.quantity),
+            int(r.quantity),                      # numpy int64 does not adapt
             Decimal(str(r.unit_price)), Decimal(str(r.discount_pct)),
             Decimal(str(r.gross_amount)), Decimal(str(r.discount_amount)),
             Decimal(str(r.net_amount)),
@@ -77,7 +88,7 @@ def upsert_curated(df, run_id: str) -> int:
 
 
 def record_run(run_id, started_at, completed_at, status,
-            rows_staging, rows_curated, rows_quarantined, message=''):
+               rows_staging, rows_curated, rows_quarantined, message=''):
     with _connect() as conn:
         with conn.cursor() as cur:
             cur.execute(RUN_SQL, (
@@ -88,4 +99,11 @@ def record_run(run_id, started_at, completed_at, status,
 
 
 def load_partition(df, year: int, month: int, run_id: str) -> int:
-    raise NotImplementedError('Implement Goal 3 selected-partition load')
+    partition_key = f'order_year={year}/order_month={month}'
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.executemany(INSERT_SQL, list(_rows(df)))
+            cur.execute(PARTITION_SQL,
+                        (partition_key, utc_now_iso(), len(df), run_id))
+        conn.commit()
+    return len(df)
