@@ -51,3 +51,40 @@
   was never committed at any point in the history. These defaults were
   left unmodified because they are instructor-provided scaffolding.
   Evidence: secret-scan-verification.png
+
+  ## Week 5
+- Raw row counts: customers.csv 3003, products.json 601, orders.csv 50005.
+  Copied unchanged into data/raw/run_id=<run_id>/ with copy2.
+
+- Staging row counts: customers 3000, products 599, orders 49998.
+  Customers lost 3 duplicate versions (C00120, C01250, C02600 — newer
+  versions differ only by email casing). Products lost 1 duplicate (P0300,
+  superseded by "Nova Tablet 300 Rev2") and 1 record failing the price
+  rule. Orders lost 5 duplicate versions and 2 rule failures.
+
+- Curated row counts: 49897.
+
+- Quarantine row counts: 104, every row carrying dataset, business key,
+  rule, detail, and the original record as JSON:
+    product_unit_price_not_positive   1
+    order_quantity_out_of_range       1   (O0000112, quantity 0)
+    order_status_not_allowed          1   (O0004445, status UNKNOWN)
+    orphan_customer_reference         1   (O0002223, customer C99999)
+    orphan_product_reference        100
+  The 100 orphan product references are the cascade from quarantining the
+  one negative-price product: those orders reference a product the pipeline
+  could not vouch for, so they are rejected with a traceable reason rather
+  than published with an unreliable price.
+
+- First load affected rows: 49897.
+
+- Second rerun affected rows / evidence of idempotency: 0. The UPSERT is
+  `ON CONFLICT (order_id) DO UPDATE ... WHERE record_hash IS DISTINCT FROM
+  EXCLUDED.record_hash`, so an unchanged record is not rewritten and is not
+  counted. After both runs, `SELECT count(*), count(DISTINCT order_id)`
+  returns 49897 and 49897. A later `run-all` with a different run_id also
+  reported 0 affected rows, because record_hash covers business content
+  only and excludes pipeline_run_id and processed_at_utc.
+  Evidence: docs/evidence/goal2/load-idempotency.png,
+  docs/evidence/goal2/curated-distinct-orders.png,
+  docs/evidence/goal2/run-all-and-pipeline-runs.png
