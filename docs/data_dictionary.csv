@@ -51,3 +51,10 @@ curated.sales_order_lines,source_updated_at,timestamptz,no,Source system last-ch
 curated.sales_order_lines,pipeline_run_id,text,no,Run that last CHANGED this row,generated,Not updated when record_hash is unchanged
 curated.sales_order_lines,processed_at_utc,timestamptz,no,When curated built this row,generated,utc_now_iso at curated build time
 curated.sales_order_lines,record_hash,text,no,Change-detection hash of business content,derived,SHA-256 over sorted business keys; excludes pipeline_run_id and processed_at_utc
+quarantine,dataset,string,no,Which source dataset the rejected record came from,generated,One of customers products orders
+quarantine,business_key,string,no,Key of the rejected record,source:primary key,customer_id product_id or order_id depending on dataset
+quarantine,reason,string,no,Machine-readable rule that rejected the record,generated,First failing rule wins so each record appears once
+quarantine,detail,string,no,Human-readable explanation of the rule,generated,States the threshold or allowed values the record violated
+quarantine,pipeline_run_id,string,no,Run that rejected the record,generated,From PIPELINE_RUN_ID or a generated run id
+quarantine,quarantined_at_utc,timestamptz,no,When the record was rejected,generated,utc_now_iso at rejection time
+quarantine,record,string,no,The original record preserved verbatim,source:full row,JSON serialization of the row as it arrived so nothing is lost
