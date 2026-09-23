@@ -193,6 +193,31 @@ order_id product_id
 O0003334      P9999
 
 ========================================================================
+cascade impact - orders referencing invalid-price products
+========================================================================
+products with non-positive unit_price:
+product_id                name  unit_price
+     P0078 Nova Networking 078      -199.0
+
+orders referencing those products = 99
+order_id product_id quantity    status
+O0000204      P0078        7 DELIVERED
+O0000444      P0078        7   PENDING
+O0000562      P0078        8    PACKED
+O0001777      P0078        3    PACKED
+O0001955      P0078        8    PACKED
+O0003154      P0078        3    PACKED
+O0003566      P0078        8      PAID
+O0003896      P0078        5 DELIVERED
+O0003907      P0078        6    PACKED
+O0004408      P0078        3      PAID
+
+========================================================================
+cascade impact - orders referencing inactive products
+========================================================================
+inactive products = 28   orders referencing them = 2386
+
+========================================================================
 summary
 ========================================================================
 customers rows=3003 distinct=3000

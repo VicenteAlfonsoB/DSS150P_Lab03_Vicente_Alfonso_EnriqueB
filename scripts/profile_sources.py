@@ -81,6 +81,23 @@ def numerics(name, df, cols):
             print(df.loc[bad, [df.columns[0], c]].head(5).to_string(index=False))
 
 
+def cascade(orders, products):
+    banner('cascade impact - orders referencing invalid-price products')
+    price = pd.to_numeric(products['unit_price'], errors='coerce')
+    bad = products.loc[price.notna() & (price <= 0), ['product_id', 'name', 'unit_price']]
+    print('products with non-positive unit_price:')
+    print(bad.to_string(index=False) if len(bad) else '  (none)')
+    if len(bad):
+        hit = orders['product_id'].isin(set(bad['product_id']))
+        print(f'\norders referencing those products = {int(hit.sum())}')
+        print(orders.loc[hit, ['order_id', 'product_id', 'quantity', 'status']].head(10).to_string(index=False))
+
+    banner('cascade impact - orders referencing inactive products')
+    inactive = products.loc[products['active'] == False, 'product_id']
+    hit2 = orders['product_id'].isin(set(inactive))
+    print(f'inactive products = {len(inactive)}   orders referencing them = {int(hit2.sum())}')
+
+
 def main():
     customers, orders, products = load_sources()
 
@@ -161,6 +178,8 @@ def main():
     print(f'\norders with unknown product_id = {int(orphan_p.sum())}')
     if orphan_p.any():
         print(orders.loc[orphan_p, ['order_id', 'product_id']].head(10).to_string(index=False))
+
+    cascade(orders, products)
 
     banner('summary')
     print(f'customers rows={len(customers)} distinct={customers["customer_id"].nunique()}')
