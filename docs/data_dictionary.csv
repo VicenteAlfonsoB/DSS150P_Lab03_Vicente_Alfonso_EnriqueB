@@ -1,1 +1,53 @@
 layer,column_name,data_type,nullable,description,source_field,transformation_rule
+layer,column_name,data_type,nullable,description,source_field,transformation_rule
+staging.customers,customer_id,string,no,Business key for a customer,customers.csv:customer_id,Deduplicated keeping greatest updated_at
+staging.customers,first_name,string,no,Customer given name,customers.csv:first_name,None
+staging.customers,last_name,string,no,Customer family name,customers.csv:last_name,None
+staging.customers,email,string,yes,Contact email,customers.csv:email,Trimmed and lowercased; blank retained not rejected
+staging.customers,city,string,yes,Customer city,customers.csv:city,Trimmed and title-cased
+staging.customers,customer_tier,string,no,Loyalty tier,customers.csv:customer_tier,Trimmed
+staging.customers,created_at,timestamptz,no,Record creation time at source,customers.csv:created_at,Parsed as UTC
+staging.customers,updated_at,timestamptz,no,Last source change; dedup ordering key,customers.csv:updated_at,Parsed as UTC
+staging.customers,pipeline_run_id,string,no,Run that produced this row,generated,From PIPELINE_RUN_ID or a generated run id
+staging.customers,staged_at_utc,timestamptz,no,When staging wrote this row,generated,utc_now_iso at staging time
+staging.products,product_id,string,no,Business key for a product,products.json:product_id,Deduplicated keeping greatest updated_at
+staging.products,product_name,string,no,Product display name,products.json:name,Renamed from name; trimmed
+staging.products,brand,string,no,Manufacturer brand,products.json:brand,Trimmed
+staging.products,unit_price,float,no,Current list price,products.json:unit_price,Coerced to numeric; rows with value <= 0 quarantined
+staging.products,active,boolean,no,Whether the product is still sold,products.json:active,None; inactive products are NOT rejected
+staging.products,category,string,no,Product category,products.json:category.name,Flattened from nested category object
+staging.products,category_department,string,no,Parent department,products.json:category.department,Flattened; not carried to curated
+staging.products,updated_at,timestamptz,no,Last source change; dedup ordering key,products.json:updated_at,Parsed as UTC
+staging.products,pipeline_run_id,string,no,Run that produced this row,generated,From PIPELINE_RUN_ID or a generated run id
+staging.products,staged_at_utc,timestamptz,no,When staging wrote this row,generated,utc_now_iso at staging time
+staging.orders,order_id,string,no,Business key for an order line,orders.csv:order_id,Deduplicated keeping greatest updated_at
+staging.orders,customer_id,string,no,Reference to a customer,orders.csv:customer_id,Orphan references quarantined at curated
+staging.orders,product_id,string,no,Reference to a product,orders.csv:product_id,Orphan references quarantined at curated
+staging.orders,order_timestamp,timestamptz,no,Event time of the order,orders.csv:order_timestamp,Parsed as UTC; unparseable rows quarantined
+staging.orders,quantity,integer,no,Units ordered,orders.csv:quantity,Coerced to numeric; outside 1-20 quarantined
+staging.orders,unit_price,float,no,Transacted price per unit,orders.csv:unit_price,Coerced to numeric; value <= 0 quarantined
+staging.orders,discount_pct,float,no,Discount as a fraction,orders.csv:discount_pct,Coerced to numeric; outside 0-1 quarantined
+staging.orders,status,string,no,Order fulfilment status,orders.csv:status,Trimmed and uppercased; value outside allowed list quarantined
+staging.orders,updated_at,timestamptz,no,Last source change; dedup ordering key,orders.csv:updated_at,Parsed as UTC
+staging.orders,pipeline_run_id,string,no,Run that produced this row,generated,From PIPELINE_RUN_ID or a generated run id
+staging.orders,staged_at_utc,timestamptz,no,When staging wrote this row,generated,utc_now_iso at staging time
+curated.sales_order_lines,order_id,text,no,Primary key and UPSERT conflict key,staging.orders:order_id,Carried through unchanged
+curated.sales_order_lines,customer_id,text,no,Reference to a customer,staging.orders:customer_id,Verified present in staging customers
+curated.sales_order_lines,product_id,text,no,Reference to a product,staging.orders:product_id,Verified present in staging products
+curated.sales_order_lines,order_timestamp,timestamptz,no,Event time of the order,staging.orders:order_timestamp,Carried through; also derives the partition columns
+curated.sales_order_lines,customer_city,text,yes,City of the ordering customer,staging.customers:city,Left join on customer_id
+curated.sales_order_lines,customer_tier,text,yes,Loyalty tier at join time,staging.customers:customer_tier,Left join on customer_id
+curated.sales_order_lines,product_name,text,yes,Product display name,staging.products:product_name,Left join on product_id
+curated.sales_order_lines,category,text,yes,Product category,staging.products:category,Left join on product_id; department dropped
+curated.sales_order_lines,brand,text,yes,Product brand,staging.products:brand,Left join on product_id
+curated.sales_order_lines,quantity,integer,no,Units ordered,staging.orders:quantity,Cast to integer
+curated.sales_order_lines,unit_price,numeric(14:2),no,Transacted price per unit,staging.orders:unit_price,Order price used not product list price; the order is the historical fact
+curated.sales_order_lines,discount_pct,numeric(6:4),no,Discount as a fraction,staging.orders:discount_pct,Carried through unchanged
+curated.sales_order_lines,gross_amount,numeric(16:2),no,Value before discount,derived,quantity * unit_price in Decimal rounded HALF_UP to 2dp
+curated.sales_order_lines,discount_amount,numeric(16:2),no,Value of the discount,derived,gross_amount * discount_pct in Decimal rounded HALF_UP to 2dp
+curated.sales_order_lines,net_amount,numeric(16:2),no,Value after discount,derived,gross_amount - discount_amount
+curated.sales_order_lines,status,text,no,Order fulfilment status,staging.orders:status,Carried through; restricted to the allowed list
+curated.sales_order_lines,source_updated_at,timestamptz,no,Source system last-change time,staging.orders:updated_at,Renamed from updated_at
+curated.sales_order_lines,pipeline_run_id,text,no,Run that last CHANGED this row,generated,Not updated when record_hash is unchanged
+curated.sales_order_lines,processed_at_utc,timestamptz,no,When curated built this row,generated,utc_now_iso at curated build time
+curated.sales_order_lines,record_hash,text,no,Change-detection hash of business content,derived,SHA-256 over sorted business keys; excludes pipeline_run_id and processed_at_utc
