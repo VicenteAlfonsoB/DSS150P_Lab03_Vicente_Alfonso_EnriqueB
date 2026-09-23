@@ -24,6 +24,20 @@ ON CONFLICT (order_id) DO UPDATE SET
 WHERE curated.sales_order_lines.record_hash IS DISTINCT FROM EXCLUDED.record_hash
 """
 
+RUN_SQL = """
+INSERT INTO audit.pipeline_runs (
+    pipeline_run_id, started_at_utc, completed_at_utc, status,
+    rows_staging, rows_curated, rows_quarantined, message
+) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+ON CONFLICT (pipeline_run_id) DO UPDATE SET
+    completed_at_utc = EXCLUDED.completed_at_utc,
+    status = EXCLUDED.status,
+    rows_staging = EXCLUDED.rows_staging,
+    rows_curated = EXCLUDED.rows_curated,
+    rows_quarantined = EXCLUDED.rows_quarantined,
+    message = EXCLUDED.message
+"""
+
 
 def _connect():
     return psycopg.connect(
@@ -43,7 +57,7 @@ def _rows(df):
             pd.Timestamp(r.order_timestamp).to_pydatetime(),
             _text(r.customer_city), _text(r.customer_tier),
             _text(r.product_name), _text(r.category), _text(r.brand),
-            int(r.quantity),                      # numpy int64 does not adapt
+            int(r.quantity),
             Decimal(str(r.unit_price)), Decimal(str(r.discount_pct)),
             Decimal(str(r.gross_amount)), Decimal(str(r.discount_amount)),
             Decimal(str(r.net_amount)),
@@ -60,6 +74,17 @@ def upsert_curated(df, run_id: str) -> int:
             affected = cur.rowcount
         conn.commit()
     return affected
+
+
+def record_run(run_id, started_at, completed_at, status,
+            rows_staging, rows_curated, rows_quarantined, message=''):
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(RUN_SQL, (
+                run_id, started_at, completed_at, status,
+                int(rows_staging), int(rows_curated), int(rows_quarantined), message,
+            ))
+        conn.commit()
 
 
 def load_partition(df, year: int, month: int, run_id: str) -> int:

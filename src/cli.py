@@ -2,11 +2,12 @@ import argparse
 import pandas as pd
 
 from src.config import PROJECT_ROOT, DB, SETTINGS, path_for
-from src.common.audit import new_run_id
+from src.common.audit import new_run_id, utc_now_iso
 from src.extract.files import extract_sources
 from src.transform.staging import build_staging
 from src.transform.curated import build_curated
-from src.load.postgres import upsert_curated
+from src.load.postgres import upsert_curated, record_run
+from src.validate.quality import validate_curated
 
 
 def main():
@@ -65,6 +66,48 @@ def main():
         print(f'run_id={run_id}')
         print(f'rows_in_curated_file={len(df)}')
         print(f'rows_affected={affected}')
+        return
+
+    if args.command == 'validate':
+        run_id = new_run_id()
+        curated_file = path_for('curated_dir') / f'run_id={run_id}' / 'sales_order_lines.parquet'
+        if not curated_file.exists():
+            raise FileNotFoundError(
+                f'No curated output for run_id={run_id}. Run transform first.')
+        df = pd.read_parquet(curated_file)
+        errors = validate_curated(df)
+        print(f'run_id={run_id}')
+        print(f'rows_validated={len(df)}')
+        for e in errors:
+            print(f'FAIL {e}')
+        if errors:
+            raise SystemExit(1)  # non-zero exit so an orchestrator marks it failed
+        print('all checks passed')
+        return
+
+    if args.command == 'run-all':
+        run_id = new_run_id()
+        started = utc_now_iso()
+        raw_dir = extract_sources(run_id)
+        staging, q_staging = build_staging(raw_dir, run_id)
+        curated, q_curated = build_curated(staging, run_id)
+        affected = upsert_curated(curated, run_id)
+        errors = validate_curated(curated)
+        rows_quarantined = len(q_staging) + len(q_curated)
+        status = 'FAILED' if errors else 'SUCCEEDED'
+        record_run(run_id, started, utc_now_iso(), status,
+                   len(staging['orders']), len(curated), rows_quarantined,
+                   '; '.join(errors))
+        print(f'run_id={run_id}')
+        print(f'rows_staging={len(staging["orders"])}')
+        print(f'rows_curated={len(curated)}')
+        print(f'rows_quarantined={rows_quarantined}')
+        print(f'rows_affected={affected}')
+        print(f'status={status}')
+        for e in errors:
+            print(f'FAIL {e}')
+        if errors:
+            raise SystemExit(1)
         return
 
     # TODO: Wire the modular functions together. Keep orchestration logic thin.
