@@ -1,10 +1,12 @@
 import argparse
+import pandas as pd
 
 from src.config import PROJECT_ROOT, DB, SETTINGS, path_for
 from src.common.audit import new_run_id
 from src.extract.files import extract_sources
 from src.transform.staging import build_staging
 from src.transform.curated import build_curated
+from src.load.postgres import upsert_curated
 
 
 def main():
@@ -50,6 +52,19 @@ def main():
         for frame in (q_staging, q_curated):
             if len(frame):
                 print(frame['reason'].value_counts().to_string())
+        return
+
+    if args.command == 'load':
+        run_id = new_run_id()
+        curated_file = path_for('curated_dir') / f'run_id={run_id}' / 'sales_order_lines.parquet'
+        if not curated_file.exists():
+            raise FileNotFoundError(
+                f'No curated output for run_id={run_id}. Run transform first.')
+        df = pd.read_parquet(curated_file)
+        affected = upsert_curated(df, run_id)
+        print(f'run_id={run_id}')
+        print(f'rows_in_curated_file={len(df)}')
+        print(f'rows_affected={affected}')
         return
 
     # TODO: Wire the modular functions together. Keep orchestration logic thin.
