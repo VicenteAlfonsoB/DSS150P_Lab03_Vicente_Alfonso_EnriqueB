@@ -1,8 +1,9 @@
 import argparse
 
-from src.config import PROJECT_ROOT, DB, SETTINGS
+from src.config import PROJECT_ROOT, DB, SETTINGS, path_for
 from src.common.audit import new_run_id
 from src.extract.files import extract_sources
+from src.transform.staging import build_staging
 
 
 def main():
@@ -29,6 +30,22 @@ def main():
         raw_dir = extract_sources(run_id)
         print(f'run_id={run_id}')
         print(f'raw_dir={raw_dir}')
+        return
+
+    if args.command == 'transform':
+        run_id = new_run_id()
+        raw_dir = path_for('raw_dir') / f'run_id={run_id}'
+        if not raw_dir.exists():
+            raise FileNotFoundError(
+                f'No raw snapshot for run_id={run_id}. Run extract first with '
+                f'the same PIPELINE_RUN_ID.')
+        staging, quarantine = build_staging(raw_dir, run_id)
+        print(f'run_id={run_id}')
+        for name, frame in staging.items():
+            print(f'staging.{name} rows={len(frame)}')
+        print(f'quarantine rows={len(quarantine)}')
+        if len(quarantine):
+            print(quarantine['reason'].value_counts().to_string())
         return
 
     # TODO: Wire the modular functions together. Keep orchestration logic thin.
