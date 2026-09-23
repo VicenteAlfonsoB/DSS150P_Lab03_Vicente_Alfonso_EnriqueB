@@ -1,6 +1,8 @@
 import argparse
+
 from src.config import PROJECT_ROOT, DB, SETTINGS
 from src.common.audit import new_run_id
+from src.extract.files import extract_sources
 
 
 def main():
@@ -20,6 +22,13 @@ def main():
         print('PROJECT_ROOT=', PROJECT_ROOT)
         print('DB host/database=', DB['host'], DB['dbname'])
         print('Configured source=', SETTINGS['pipeline']['source_dir'])
+        return
+
+    if args.command == 'extract':
+        run_id = new_run_id()
+        raw_dir = extract_sources(run_id)
+        print(f'run_id={run_id}')
+        print(f'raw_dir={raw_dir}')
         return
 
     # TODO: Wire the modular functions together. Keep orchestration logic thin.
