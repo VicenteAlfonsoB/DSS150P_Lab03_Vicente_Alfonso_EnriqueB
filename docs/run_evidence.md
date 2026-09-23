@@ -88,3 +88,56 @@
   Evidence: docs/evidence/goal2/load-idempotency.png,
   docs/evidence/goal2/curated-distinct-orders.png,
   docs/evidence/goal2/run-all-and-pipeline-runs.png
+
+## Week 6
+- Benchmark table attached: yes.
+  data/benchmarks/run_id=run_manual_002/benchmark_results.csv, committed
+  with -f since data/benchmarks/ is otherwise gitignored. Medians of 5
+  repetitions over 49,897 curated rows, measured on this machine
+  (MacBook Air, Apple Silicon arm64, macOS):
+
+    storage_type  file_size_bytes  write_s   full_read_s  filtered_read_s
+    csv               14,193,582   0.316258     0.114239         0.107082
+    jsonl             29,891,684   0.340771     0.238224         0.273112
+    parquet            5,433,864   0.129019     0.031575         0.009790
+    postgresql        13,639,680   0.386492     0.192824         0.037187
+
+  Filtered read selects status = DELIVERED. Parquet won every axis:
+  0.38x CSV size, 0.41x CSV write time, 3.6x faster full read, 10.9x
+  faster filtered read. Its filtered read is 3.2x faster than its own
+  full read, which is predicate pushdown working. JSONL's filtered read
+  is slower than its full read, because filtering a format with no
+  pushdown is pure added work. Full reasoning in docs/storage_analysis.md.
+  Evidence: docs/evidence/goal3/benchmark-table.png,
+  docs/evidence/goal3/file-sizes-and-partitions.png
+
+- Partition selected: order_year=2026 / order_month=1.
+  Curated output is written as Hive-partitioned Parquet under
+  data/partitioned/run_id=<run_id>/order_year=<yyyy>/order_month=<m>/,
+  producing 21 partitions (12 months of 2025, 9 of 2026 — the source
+  ends 2026-09-12). `load-partition` reads only the one requested
+  directory, so loading January 2026 never opens the other 20.
+
+- Partition row count: 2506, agreed by three independent counts —
+  rows_loaded reported by the CLI, row_count in audit.partition_loads,
+  and a direct count against curated.sales_order_lines.
+  Evidence: docs/evidence/goal3/partition-load.png
+
+- PostgreSQL verification query:
+
+    SELECT * FROM audit.partition_loads;
+
+    partition_key                  | loaded_at_utc                 | row_count | pipeline_run_id
+    order_year=2026/order_month=1  | 2026-09-23 09:39:15.445865+00 |      2506 | run_manual_002
+
+    SELECT count(*) FROM curated.sales_order_lines
+     WHERE date_part('year',  order_timestamp) = 2026
+       AND date_part('month', order_timestamp) = 1;
+
+    count
+    -----
+     2506
+
+  audit.partition_loads is keyed on partition_key with ON CONFLICT DO
+  UPDATE, so reloading a partition refreshes its audit row rather than
+  appending a duplicate.
