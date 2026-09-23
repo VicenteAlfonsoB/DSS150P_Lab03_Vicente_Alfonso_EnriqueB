@@ -141,3 +141,67 @@
   audit.partition_loads is keyed on partition_key with ON CONFLICT DO
   UPDATE, so reloading a partition refreshes its audit row rather than
   appending a duplicate.
+  
+  ## Week 7
+- DAG ID: dss150p_sales_pipeline
+
+- Schedule: `0 2 * * *` (02:00 UTC daily), start_date 2026-01-01,
+  catchup=False set explicitly so missed intervals are not backfilled,
+  max_active_runs=1 because every run writes the same curated table and
+  concurrent runs would race on the same order_ids. The scheduler fired
+  run `scheduled__2026-09-22T02:00:00+00:00` on its own, confirming the
+  cron works rather than merely parsing, and catchup=False meant it
+  scheduled only the most recent interval instead of every 02:00 since
+  January.
+
+- Parameters used: run_mode (enum full|partition), year (integer),
+  month (integer 1-12). run_mode is applied in the Jinja template of the
+  load task, selecting between `python -m src.cli load` and
+  `python -m src.cli load-partition --year {{ params.year }} --month
+  {{ params.month }}`. The DAG chooses between existing CLI commands; it
+  does not reimplement loading. year and month are read only in partition
+  mode — a run with year=2024 and run_mode=full succeeded, because the
+  full branch ignores them.
+
+- Successful run ID: manual__2026-09-23T12:08:23+00:00
+  All four tasks green in order extract → transform → load → validate.
+  Also scheduled__2026-09-22T02:00:00+00:00, fired by the scheduler, whose
+  load task reported rows_affected=0 — the record_hash guard holding
+  through the orchestrator, not just from the command line.
+  Evidence: dag-success-graph.png, load-task-log-scheduled.png
+
+- Deliberate failure run ID: manual__2026-09-23T12:17:50+00:00
+  Triggered with run_mode=partition, year=2024, month=1. The dataset spans
+  2025-2026 only, so no order_year=2024 partition exists. No code was
+  modified to produce this failure; the run asks the pipeline for
+  something real that is genuinely absent.
+  Evidence: dag-deliberate-failure.png
+
+- Retry/failure-handling evidence:
+  * retries=2 with retry_delay=1 minute. The task Details panel shows
+    Task Tries 1 and 2 as failed against Max Tries 2, then a third and
+    final attempt.
+  * load raised FileNotFoundError naming the missing partition path,
+    exactly the error raised when the same command is run by hand.
+  * on_failure_callback wrote a structured record to the task log and to
+    logs/dag_failures.jsonl, carrying dag_id, task_id, run_id, try_number,
+    max_tries, state, params, exception, and log_url.
+  * validate never ran. Its trigger rule is all_success, so it was held at
+    upstream_failed. This matters: without it, validation would have run
+    against the previous run's data and reported "all checks passed",
+    which is worse than failing.
+  * execution_timeout=15 minutes is set on every task. A full run takes
+    under a minute, so the timeout detects a hang rather than budgeting
+    performance.
+  Evidence: retry-attempts.png, failure-log-and-retries.png
+
+- Final recovery run ID: manual__2026-09-23T12:28:20+00:00
+  Same run_mode=partition with year=2026, month=1. The load task ran the
+  identical command shape and reported
+  partition=order_year=2026/order_month=1 and rows_loaded=2506, exit code
+  0, with all four tasks green. audit.partition_loads shows the row keyed
+  order_year=2026/order_month=1 updated in place with the recovery run's
+  pipeline_run_id rather than duplicated, because the insert is guarded by
+  ON CONFLICT (partition_key) DO UPDATE.
+  Evidence: dag-recovery-run.png, recovery-load-partition-log.png,
+  audit-and-failure-record.png
